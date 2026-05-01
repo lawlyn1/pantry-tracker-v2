@@ -51,16 +51,31 @@ export const ManualEntry: React.FC = () => {
         shelfLifeDays = Math.ceil((expiry.getTime() - purchase.getTime()) / (1000 * 60 * 60 * 24));
       }
 
+      // Normalize unit_size to base unit (g, ml, or item)
+      let normalizedUnitSize = unitSize;
+      let normalizedUnitType = unitType;
+      
+      if (unitType.toLowerCase() === 'kg') {
+        normalizedUnitSize *= 1000;
+        normalizedUnitType = 'g';
+      } else if (unitType.toLowerCase() === 'l') {
+        normalizedUnitSize *= 1000;
+        normalizedUnitType = 'ml';
+      }
+
+      // Consolidated quantity: total volume = (number of items) * (size per item)
+      const totalQuantity = quantity * normalizedUnitSize;
+
       const { error } = await supabase
         .from('ingredients')
         .insert({
           user_id: user.id,
           name: name.trim(),
           category,
-          quantity,
-          unit: 'item',
-          unit_size: unitSize,
-          unit_type: unitType,
+          quantity: totalQuantity, // Consolidated total volume
+          unit: normalizedUnitType, // Base unit (g, ml, or item)
+          unit_size: 1, // Always 1 for consolidated tracking
+          unit_type: normalizedUnitType, // Always base unit
           purchase_date: purchaseDate,
           expiry_date: expiryDateISO,
           shelf_life_days: shelfLifeDays,

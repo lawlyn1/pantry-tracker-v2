@@ -1,240 +1,128 @@
 import { NextResponse } from 'next/server';
 import Groq from 'groq-sdk';
 
-// Model hierarchy for rate limit bypass
-const MODEL_PRIORITY = [
-  'llama-3.3-70b-versatile', // Primary
-  'llama-3.1-8b-instant'    // Immediate Backup
-];
+const groq = new Groq({
+  apiKey: process.env.GROQ_API_KEY,
+  maxRetries: 1, 
+});
 
-// Helper function to split text into exactly 20 chunks
-function splitTextIntoChunks(text: string, numChunks: number = 20): string[] {
-  const lines = text.split('\n');
-  const linesPerChunk = Math.ceil(lines.length / numChunks);
-  const chunks: string[] = [];
-  
-  for (let i = 0; i < lines.length; i += linesPerChunk) {
-    const chunk = lines.slice(i, i + linesPerChunk).join('\n');
-    chunks.push(chunk);
-  }
-  
-  return chunks;
-}
+const SYSTEM_PROMPT = `Extract food/drink items from Tesco receipt.
 
-// Helper function to get total item count from 8B model
-async function getTotalItemCount(text: string): Promise<number> {
-  const groq = new Groq({ apiKey: process.env.GROQ_API_KEY });
-  
-  const prompt = `Count the total number of food/drink items on this receipt. Ignore non-food items like dishcloths. Return ONLY a number, no text.
+MULTIPLIERS: Calculate total quantity (e.g., "3† Water 24x500ml" → qty:72, size:500, type:ml).
+SHORT-DATED: Extract all items from "shorter life" section.
+ALCOHOL: Include all Wine, Port, Spirits as "Drink".
+SYMBOLS: Ignore † and ‡ (tax markers).
 
-Receipt Text:
-${text}`;
+JSON keys: n, q, up, tp, cat, stor, shelf, size, type, cal, pro, carb, fat
+(n=name, q=quantity, up=unit_price, tp=total_price, cat=category, stor=storage_location, shelf=shelf_life_days, size=unit_size, type=unit_type, cal=calories, pro=protein_g, carb=carbs_g, fat=fat_g)
 
-  try {
-    const response = await groq.chat.completions.create({
-      messages: [{ role: 'user', content: prompt }],
-      model: 'llama-3.1-8b-instant',
-      temperature: 0,
-      max_tokens: 10,
-    });
+STORAGE: Raw meat/dairy/fresh produce→fridge. Tinned/dry pasta→pantry. Frozen→freezer. Default: fridge for perishables, pantry for shelf-stable.
+
+NUTRITION: Estimate cal/pro/carb/fat per 100g/ml (0 for non-food).
+
+Exclude ONLY non-consumable household items.
+Respond ONLY with JSON: {"items": [...]}`;
+
+const SYSTEM_PROMPT_FAST = `Extract food/drink items from Tesco receipt.
+
+MULTIPLIERS: Calculate total quantity (e.g., "3† Water 24x500ml" → qty:72, size:500, type:ml).
+SHORT-DATED: Extract all items from "shorter life" section.
+ALCOHOL: Include all Wine, Port, Spirits as "Drink".
+SYMBOLS: Ignore † and ‡ (tax markers).
+
+JSON keys: n, q, up, tp, cat, stor, shelf, size, type, cal:0, pro:0, carb:0, fat:0
+(n=name, q=quantity, up=unit_price, tp=total_price, cat=category, stor=storage_location, shelf=shelf_life_days, size=unit_size, type=unit_type, cal=calories, pro=protein_g, carb=carbs_g, fat=fat_g)
+
+STORAGE: Raw meat/dairy/fresh produce→fridge. Tinned/dry pasta→pantry. Frozen→freezer. Default: fridge for perishables, pantry for shelf-stable.
+
+Exclude ONLY non-consumable household items.
+Respond ONLY with JSON: {"items": [...]}`;
+
+function cleanReceiptText(text: string) {
+  // Strip VAT daggers that cause the LLM to choke
+  let cleaned = text.replace(/[†‡]/g, '');
+
+  const startIdx = cleaned.indexOf('Substitutions') !== -1 
+    ? cleaned.indexOf('Substitutions') 
+    : (cleaned.indexOf('Items with a shorter life') !== -1 
+        ? cleaned.indexOf('Items with a shorter life') 
+        : cleaned.indexOf('QtyProduct'));
     
-    const countText = response.choices[0]?.message?.content || '0';
-    const count = parseInt(countText.replace(/\D/g, ''), 10);
-    return isNaN(count) ? 0 : count;
-  } catch (error) {
-    console.error('Failed to get item count, defaulting to 0:', error);
-    return 0;
-  }
-}
+  const endIdx = cleaned.indexOf('Basket value before offers');
 
-async function parseItems(text: string, directive: string, receiptDate: string, itemCount: number = 20, activeModels?: Set<string>): Promise<any[]> {
-  const groq = new Groq({ apiKey: process.env.GROQ_API_KEY });
-
-  const prompt = `Extract the food/drink items from this receipt text into a JSON array of objects with these keys: name, quantity, unit_price, total_price, category, storage_location, shelf_life_days, unit_size, unit_type. If a price is missing, use null. DO NOT include items that are not in the text.
-
-${directive}
-
-Receipt Text:
-${text}`;
-
-  let chatCompletion;
-  let lastError: any = null;
-  
-  // Simple model hopper
-  for (const model of MODEL_PRIORITY) {
-    // Skip if model is not in active set
-    if (activeModels && !activeModels.has(model)) {
-      console.log(`Skipping ${model} (blacklisted)`);
-      continue;
-    }
-    
-    try {
-      console.log(`Trying model: ${model}`);
-      chatCompletion = await groq.chat.completions.create({
-        messages: [{ role: 'user', content: prompt }],
-        model: model,
-        temperature: 0.1,
-        response_format: { type: 'json_object' },
-      });
-      console.log(`Success with model: ${model}`);
-      break; // Success, exit model loop
-    } catch (error: any) {
-      lastError = error;
-      if (error?.status === 429 || error?.error?.code === 'rate_limit_exceeded') {
-        console.warn(`Rate limit hit for ${model}. Trying next model...`);
-        // Dynamically blacklist this model
-        if (activeModels) {
-          activeModels.delete(model);
-        }
-        continue; // Try next model
-      } else if (error?.status === 413) {
-        console.warn(`Request too large for ${model}. Trying next model...`);
-        continue; // Try next model
-      } else if (error?.status === 400 || error?.error?.type === 'model_decommissioned' || error?.error?.code === 'model_not_found') {
-        console.warn(`Model error for ${model}: ${error.message}. Blacklisting and trying next model...`);
-        // Blacklist decommissioned models
-        if (activeModels) {
-          activeModels.delete(model);
-        }
-        continue; // Try next model
-      } else {
-        console.warn(`Unexpected error for ${model}: ${error.message}. Trying next model...`);
-        continue; // Try next model anyway
-      }
-    }
-  }
-
-  if (!chatCompletion) {
-    console.warn('All models failed for this chunk, returning empty array');
-    return [];
-  }
-
-  let rawContent = chatCompletion.choices[0]?.message?.content || '{}';
-
-  // 1. Find the first and last curly braces to extract only the JSON object
-  const firstBrace = rawContent.indexOf('{');
-  const lastBrace = rawContent.lastIndexOf('}');
-
-  if (firstBrace !== -1 && lastBrace !== -1 && lastBrace >= firstBrace) {
-    rawContent = rawContent.substring(firstBrace, lastBrace + 1);
-  } else {
-    // 2. Safety net: If the AI returned an array instead of an object
-    const firstBracket = rawContent.indexOf('[');
-    const lastBracket = rawContent.lastIndexOf(']');
-    if (firstBracket !== -1 && lastBracket !== -1 && lastBracket >= firstBracket) {
-      rawContent = rawContent.substring(firstBracket, lastBracket + 1);
-    } else {
-      console.error("Raw AI Output:", rawContent);
-      throw new Error("Could not locate valid JSON brackets in the AI response.");
-    }
-  }
-
-  // 3. Parse the cleanly extracted string
-  const parsed = JSON.parse(rawContent);
-  
-  // Ensure we always return an array, even if the AI nested it or returned a single object
-  let items = [];
-  if (Array.isArray(parsed)) {
-    items = parsed;
-  } else if (parsed.items && Array.isArray(parsed.items)) {
-    items = parsed.items;
-  } else if (parsed.products && Array.isArray(parsed.products)) {
-    items = parsed.products;
-  } else {
-    // If the AI just returned a single object instead of an array
-    items = [parsed];
+  if (startIdx !== -1) {
+    cleaned = cleaned.substring(
+      startIdx, 
+      endIdx !== -1 ? endIdx : cleaned.length
+    );
   }
   
-  // Filter out any object that doesn't at least have a 'name'
-  return items.filter((item: any) => item && typeof item === 'object' && item.name);
+  return cleaned.trim();
 }
 
 export async function POST(req: Request) {
   try {
-    const { rawText } = await req.json();
+    const body = await req.json();
+    const rawText = body.rawText || body.text;
+    const deepMacroScan = body.deepMacroScan !== false; // Default to true
     
-    if (!process.env.GROQ_API_KEY) {
-      console.error("Missing GROQ_API_KEY environment variable");
-      return NextResponse.json({ error: "Server configuration error" }, { status: 500 });
-    }
+    if (!rawText) return NextResponse.json({ error: 'No text provided' }, { status: 400 });
 
-    // Extract receipt date using regex
-    const dateMatch = rawText.match(/(\d{1,2}\s+(?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[a-z]*\s+\d{4})/i);
-    const receiptDate = dateMatch ? dateMatch[1] : "unknown date";
+    const cleanedText = cleanReceiptText(rawText);
+    const selectedPrompt = deepMacroScan ? SYSTEM_PROMPT : SYSTEM_PROMPT_FAST;
 
-    // Isolate Substitutions section and filter to only delivered items
-    const substitutionsStart = rawText.indexOf('Substitutions');
-    const unavailableStart = rawText.indexOf('Unavailable');
-    
-    let preprocessedText = rawText;
-    
-    if (substitutionsStart !== -1 && unavailableStart !== -1) {
-      const beforeSubstitutions = rawText.substring(0, substitutionsStart);
-      const substitutionsSection = rawText.substring(substitutionsStart, unavailableStart);
-      const afterUnavailable = rawText.substring(unavailableStart);
-      
-      // Surgical line filter: keep only lines immediately following "Substituted with:"
-      const lines = substitutionsSection.split('\n');
-      const cleanedLines: string[] = [];
-      
-      for (let i = 0; i < lines.length; i++) {
-        const line = lines[i];
-        if (i > 0 && lines[i - 1].includes('Substituted with:')) {
-          cleanedLines.push(line);
-        }
-      }
-      
-      const cleanedSubstitutions = cleanedLines.join('\n');
-      
-      const shortLifeStart = afterUnavailable.indexOf('Items with a shorter life');
-      const afterShortLife = shortLifeStart !== -1 
-        ? afterUnavailable.substring(shortLifeStart) 
-        : afterUnavailable;
-      
-      preprocessedText = beforeSubstitutions + cleanedSubstitutions + afterShortLife;
-    } else if (unavailableStart !== -1) {
-      const shortLifeStart = rawText.indexOf('Items with a shorter life');
-      const restOfItemsStart = rawText.indexOf('The rest of your items');
-      
-      let afterUnavailable: string;
-      if (shortLifeStart !== -1) {
-        afterUnavailable = rawText.substring(shortLifeStart);
-      } else if (restOfItemsStart !== -1) {
-        afterUnavailable = rawText.substring(restOfItemsStart);
-      } else {
-        afterUnavailable = rawText.substring(unavailableStart);
-      }
-      
-      preprocessedText = rawText.substring(0, unavailableStart) + afterUnavailable;
-    }
+    const chatCompletion = await groq.chat.completions.create({
+      messages: [
+        { role: 'system', content: selectedPrompt },
+        { role: 'user', content: cleanedText }
+      ],
+      model: 'llama-3.3-70b-versatile',
+      temperature: 0.1,
+      response_format: { type: 'json_object' },
+      max_tokens: 4096,
+    });
 
-    // Split text into 20 chunks
-    const textChunks = splitTextIntoChunks(preprocessedText, 20);
-    console.log(`Split text into ${textChunks.length} chunks`);
+    console.log(`[DEBUG] Deep Macro Scan: ${deepMacroScan}, Used ${deepMacroScan ? 'full' : 'fast'} prompt`);
 
-    // Simple aggregation
-    const allItems: any[] = [];
-    
-    // Stateful blacklist of active models
-    const activeModels = new Set<string>(MODEL_PRIORITY);
+    const content = chatCompletion.choices[0]?.message?.content || '{"items": []}';
+    const parsed = JSON.parse(content);
+    const allItems = parsed.items || [];
 
-    // Process each chunk sequentially
-    for (let chunkIndex = 0; chunkIndex < textChunks.length; chunkIndex++) {
-      console.log(`Processing chunk ${chunkIndex + 1}/${textChunks.length}`);
+    // Map short JSON keys back to full names
+    const mappedItems = allItems.map((item: any) => ({
+      name: item.n,
+      quantity: item.q,
+      unit_price: item.up,
+      total_price: item.tp,
+      category: item.cat,
+      storage_location: item.stor,
+      shelf_life_days: item.shelf,
+      unit_size: item.size,
+      unit_type: item.type,
+      calories: item.cal || 0,
+      protein_g: item.pro || 0,
+      carbs_g: item.carb || 0,
+      fat_g: item.fat || 0,
+    }));
+
+    console.log(`[DEBUG] AI returned ${mappedItems.length} items from parsed receipt`);
+
+    const validItems = mappedItems.filter((item: any) => {
+      if (!item || typeof item !== 'object' || !item.name) return false;
+      const name = item.name.toLowerCase();
+      // Strict exclusions for non-food
+      const isServiceCharge = name.includes('basket') || name.includes('delivery') || name.includes('minimum charge');
+      const isHousehold = name.includes('dishcloth') || name.includes('foil') || name.includes('bleach') || name.includes('kitchen roll');
       
-      const directive = `Extract items from this chunk of the receipt.`;
-      const items = await parseItems(textChunks[chunkIndex], directive, receiptDate, 20, activeModels);
-      
-      if (items.length > 0) {
-        allItems.push(...items);
-        console.log(`Chunk ${chunkIndex + 1}: Retrieved ${items.length} items (Total: ${allItems.length})`);
-      }
-    }
+      return !isServiceCharge && !isHousehold;
+    });
 
-    console.log("Final Aggregated Items:", allItems);
-    return NextResponse.json({ items: allItems });
+    console.log(`[DEBUG] ${validItems.length} items passed backend filter`);
+    console.log(`[DEBUG] ${allItems.length - validItems.length} items rejected by backend filter`);
+
+    return NextResponse.json({ items: validItems });
   } catch (error: any) {
-    console.error("API ROUTE ERROR:", error);
-    return NextResponse.json({ error: error.message || "Failed to process receipt" }, { status: 500 });
+    console.error("Parse Error:", error);
+    return NextResponse.json({ error: error.message || 'Internal Server Error' }, { status: 500 });
   }
 }

@@ -1,13 +1,13 @@
 import { ReceiptItemLine } from '@/types';
 
-export const parseReceipt = async (rawText: string): Promise<ReceiptItemLine[]> => {
+export const parseReceipt = async (rawText: string, deepMacroScan: boolean = true): Promise<ReceiptItemLine[]> => {
   try {
     const response = await fetch('/api/parse-receipt', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
       },
-      body: JSON.stringify({ rawText }),
+      body: JSON.stringify({ rawText, deepMacroScan }),
     });
 
     if (!response.ok) {
