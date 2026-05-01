@@ -14,6 +14,8 @@ export interface Ingredient {
   category: string;
   quantity: number;
   unit: string;
+  unit_size: number;
+  unit_type: string;
   purchase_date: string;
   expiry_date: string | null;
   shelf_life_days: number | null;
@@ -22,6 +24,10 @@ export interface Ingredient {
   barcode: string | null;
   brand: string | null;
   notes: string | null;
+  calories: number;
+  protein_g: number;
+  carbs_g: number;
+  fat_g: number;
   created_at: string;
   updated_at: string;
 }
@@ -62,6 +68,12 @@ export interface ReceiptItemLine {
   category: string;
   storage_location: 'fridge' | 'freezer' | 'pantry';
   shelf_life_days: number;
+  unit_size: number;
+  unit_type: string;
+  calories: number;
+  protein_g: number;
+  carbs_g: number;
+  fat_g: number;
 }
 
 export type IngredientStatus = Ingredient['status'];

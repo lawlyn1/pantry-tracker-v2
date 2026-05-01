@@ -47,6 +47,8 @@ CREATE TABLE public.ingredients (
   category TEXT NOT NULL,
   quantity NUMERIC NOT NULL DEFAULT 0,
   unit TEXT NOT NULL,
+  unit_size NUMERIC DEFAULT 1,
+  unit_type TEXT DEFAULT 'item',
   purchase_date TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW(),
   expiry_date TIMESTAMP WITH TIME ZONE,
   shelf_life_days INTEGER,
@@ -55,6 +57,10 @@ CREATE TABLE public.ingredients (
   barcode TEXT,
   brand TEXT,
   notes TEXT,
+  calories INTEGER DEFAULT 0,
+  protein_g NUMERIC DEFAULT 0,
+  carbs_g NUMERIC DEFAULT 0,
+  fat_g NUMERIC DEFAULT 0,
   created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
   updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );

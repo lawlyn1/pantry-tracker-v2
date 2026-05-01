@@ -11,7 +11,9 @@ export const parseReceipt = async (rawText: string): Promise<ReceiptItemLine[]> 
     });
 
     if (!response.ok) {
-      throw new Error('Failed to parse receipt');
+      const errorText = await response.text();
+      console.error('Backend API Error:', errorText);
+      throw new Error(`API Error: ${response.status} - ${errorText}`);
     }
 
     const data = await response.json();

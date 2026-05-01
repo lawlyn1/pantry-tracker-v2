@@ -7,7 +7,7 @@ import { ReceiptItemLine } from '@/types';
 import { supabase } from '@/lib/supabase';
 
 export const ReceiptImport: React.FC = () => {
-  const { user, addIngredientsBulk } = usePantry();
+  const { user } = usePantry();
   const [receiptText, setReceiptText] = useState('');
   const [parsedItems, setParsedItems] = useState<ReceiptItemLine[]>([]);
   const [parsing, setParsing] = useState(false);
@@ -21,7 +21,24 @@ export const ReceiptImport: React.FC = () => {
       setSuccess(null);
       setParsing(true);
       const items = await parseReceipt(receiptText);
-      setParsedItems(items);
+      if (Array.isArray(items)) {
+        // Extract all prices from raw receipt text
+        const pricePattern = /£\d+\.\d{2}/g;
+        const pricesInText = receiptText.match(pricePattern) || [];
+        const priceSet = new Set(pricesInText);
+
+        // Filter out items whose prices don't exist in the raw text
+        const filteredItems = items.filter((item: any) => {
+          if (!item.total_price) return false;
+          const priceStr = `£${item.total_price.toFixed(2)}`;
+          return priceSet.has(priceStr);
+        });
+
+        console.log(`Filtered ${items.length - filteredItems.length} items with prices not found in receipt text`);
+        setParsedItems(filteredItems);
+      } else {
+        setError('Invalid response format: expected array of items');
+      }
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to parse receipt');
     } finally {
@@ -49,37 +66,52 @@ export const ReceiptImport: React.FC = () => {
       const dateMatch = receiptText.match(/(\d{1,2}\s+(?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[a-z]*\s+\d{4})/i);
       const receiptDate = dateMatch ? new Date(dateMatch[1]) : new Date();
 
-      // Map parsed items to ingredients schema
-      const ingredients = parsedItems.map(item => {
+      // Map parsed items to ingredients schema according to DATABASE_SCHEMA.md
+      const ingredients = parsedItems.map((item: any) => {
         const purchaseDate = receiptDate.toISOString();
-        const expiryDate = new Date(receiptDate.getTime() + (item.shelf_life_days * 24 * 60 * 60 * 1000)).toISOString();
+        const expiryDate = new Date(receiptDate.getTime() + ((item.shelf_life_days || item.shelf_life || 7) * 24 * 60 * 60 * 1000)).toISOString();
 
         return {
           user_id: user.id,
-          name: item.name,
-          category: item.category,
-          quantity: item.quantity,
+          name: item.name || item.product_name || item.item_name || 'Unknown Item',
+          category: item.category || 'Other',
+          quantity: Number(item.quantity) || 1,
           unit: 'item', // Default unit since receipt doesn't specify
+          unit_size: Number(item.unit_size || item.size || 1),
+          unit_type: item.unit_type || item.unit || 'item',
           purchase_date: purchaseDate,
           expiry_date: expiryDate,
-          shelf_life_days: item.shelf_life_days,
-          status: 'active' as const,
-          storage_location: item.storage_location,
+          shelf_life_days: Number(item.shelf_life_days || item.shelf_life || 7),
+          status: 'active',
+          storage_location: item.storage_location || 'pantry',
           barcode: null,
           brand: null,
           notes: null,
+          calories: Number(item.calories || item.kcal || 0),
+          protein_g: Number(item.protein_g || item.protein || 0),
+          carbs_g: Number(item.carbs_g || item.carbs || 0),
+          fat_g: Number(item.fat_g || item.fat || 0),
         };
       });
 
-      // Bulk insert to Supabase
-      await addIngredientsBulk(ingredients);
+      // Filter out items without valid names
+      const validIngredients = ingredients.filter(item => item.name && item.name !== 'Unknown Item');
+
+      if (validIngredients.length === 0) {
+        setError('No valid items to save (all items missing names)');
+        return;
+      }
+
+      // Bulk insert to Supabase using direct client
+      const { error } = await supabase
+        .from('ingredients')
+        .insert(validIngredients);
+
+      if (error) throw error;
 
       setSuccess('Receipt saved successfully! Items added to pantry.');
       setReceiptText('');
       setParsedItems([]);
-      
-      // Refresh ingredients to show new items
-      await supabase.from('ingredients').select('*').order('created_at', { ascending: false });
     } catch (err) {
       console.error('Save error:', err);
       setError(err instanceof Error ? err.message : 'Failed to save receipt');
