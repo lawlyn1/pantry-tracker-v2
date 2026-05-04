@@ -1,4 +1,4 @@
-import type { Metadata } from 'next';
+import type { Metadata, Viewport } from 'next';
 import { Inter } from 'next/font/google';
 import './globals.css';
 import { PantryProvider } from '@/context/PantryContext';
@@ -6,8 +6,15 @@ import { PantryProvider } from '@/context/PantryContext';
 const inter = Inter({ subsets: ['latin'] });
 
 export const metadata: Metadata = {
-  title: 'Pantry Tracker V2',
-  description: 'Track your pantry items, food logs, and receipts',
+  title: 'Pantry Tracker',
+  description: 'Track your kitchen inventory, parse receipts, and reduce food waste',
+};
+
+export const viewport: Viewport = {
+  width: 'device-width',
+  initialScale: 1,
+  maximumScale: 1,
+  userScalable: false,
 };
 
 export default function RootLayout({
@@ -19,7 +26,9 @@ export default function RootLayout({
     <html lang="en">
       <body className={inter.className}>
         <PantryProvider>
-          {children}
+          <main className="min-h-screen">
+            {children}
+          </main>
         </PantryProvider>
       </body>
     </html>

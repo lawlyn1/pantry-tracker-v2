@@ -1,3 +1,70 @@
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
+
+@layer base {
+  :root {
+    --color-primary: #2563eb;
+    --color-primary-hover: #1d4ed8;
+    --color-danger: #dc2626;
+    --color-success: #16a34a;
+    --color-warning: #f59e0b;
+    --color-expired: #fecaca;
+    --color-expiring-soon: #fed7aa;
+    --color-fresh: #dcfce7;
+  }
+
+  body {
+    @apply bg-gray-50 text-gray-900 antialiased;
+  }
+
+  * {
+    -webkit-tap-highlight-color: transparent;
+  }
+}
+
+@layer components {
+  .btn-primary {
+    @apply px-4 py-2.5 bg-blue-600 text-white rounded-xl font-medium
+           hover:bg-blue-700 active:scale-[0.97] transition-all duration-150
+           disabled:bg-gray-300 disabled:cursor-not-allowed text-sm;
+  }
+
+  .btn-danger {
+    @apply px-4 py-2.5 bg-red-500 text-white rounded-xl font-medium
+           hover:bg-red-600 active:scale-[0.97] transition-all duration-150 text-sm;
+  }
+
+  .btn-secondary {
+    @apply px-4 py-2.5 bg-gray-200 text-gray-700 rounded-xl font-medium
+           hover:bg-gray-300 active:scale-[0.97] transition-all duration-150 text-sm;
+  }
+
+  .card {
+    @apply bg-white rounded-2xl shadow-sm border border-gray-100 p-4;
+  }
+
+  .input-field {
+    @apply w-full px-3 py-2.5 border border-gray-200 rounded-xl bg-white
+           text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent
+           transition-all duration-150;
+  }
+
+  .select-field {
+    @apply w-full px-3 py-2.5 border border-gray-200 rounded-xl bg-white
+           text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent
+           transition-all duration-150 appearance-none cursor-pointer;
+  }
+
+  .nav-tab {
+    @apply px-4 py-2 rounded-xl text-sm font-medium transition-all duration-150;
+  }
+
+  .nav-tab-active {
+    @apply bg-blue-600 text-white shadow-md;
+  }
+
+  .nav-tab-inactive {
+    @apply bg-white text-gray-600 hover:bg-gray-100;
+  }
+}

@@ -6,7 +6,8 @@
     "dev": "rimraf .next && next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "next lint"
+    "lint": "next lint",
+    "test": "echo \"No tests configured\""
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.45.0",
