@@ -4,7 +4,7 @@ import React, { useState } from 'react';
 import { usePantry } from '@/context/PantryContext';
 import { LOCATIONS, CATEGORIES, Location, Category } from '@/types';
 
-export const ManualEntry: React.FC = () => {
+export const AddItemForm: React.FC = () => {
   const { addItem } = usePantry();
   const [name, setName] = useState('');
   const [quantity, setQuantity] = useState(1);
