@@ -36,7 +36,8 @@ export const PantryProvider: React.FC<{ children: ReactNode }> = ({ children }) 
     const getUser = async () => {
       const { data: { user } } = await supabase.auth.getUser();
       setUser(user);
-      if (!user) {
+      // Only redirect if not on login page to prevent infinite loop
+      if (!user && window.location.pathname !== '/login') {
         window.location.href = '/login';
       }
     };
