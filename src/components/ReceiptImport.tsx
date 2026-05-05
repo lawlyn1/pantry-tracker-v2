@@ -67,6 +67,11 @@ export const ReceiptImport: React.FC = () => {
         location: item.location,
         category: item.category,
         expiration_date: item.expiration_date,
+        calories_per_100: null,
+        protein_per_100: null,
+        carbs_per_100: null,
+        fat_per_100: null,
+        fibre_per_100: null,
       }));
 
       await addItemsBulk(itemsToInsert);
