@@ -6,6 +6,7 @@ import { ReceiptImport } from '@/components/ReceiptImport';
 import { ManualEntry } from '@/components/ManualEntry';
 import { ShoppingList } from '@/components/ShoppingList';
 import { RecipeGenerator } from '@/components/RecipeGenerator';
+import LogoutButton from '@/components/LogoutButton';
 import { LOCATIONS, Location, InventoryItem } from '@/types';
 
 type Tab = 'inventory' | 'add' | 'receipt' | 'shop' | 'recipes';
@@ -89,7 +90,10 @@ export default function Home() {
       {/* Header */}
       <header className="py-4 flex items-center justify-between">
         <h1 className="text-xl font-bold text-gray-900">Pantry Tracker</h1>
-        <span className="text-xs text-gray-400">{inventory.length} items</span>
+        <div className="flex items-center gap-2">
+          <span className="text-xs text-gray-400">{inventory.length} items</span>
+          <LogoutButton />
+        </div>
       </header>
 
       {/* Tab Content */}

@@ -12,6 +12,7 @@ DROP TABLE IF EXISTS public.shopping_list CASCADE;
 -- Create inventory table
 CREATE TABLE public.inventory (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
   name TEXT NOT NULL,
   quantity INTEGER NOT NULL DEFAULT 1,
   volume_weight TEXT,
@@ -24,15 +25,11 @@ CREATE TABLE public.inventory (
 -- Create shopping_list table
 CREATE TABLE public.shopping_list (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
   name TEXT NOT NULL,
   quantity INTEGER NOT NULL DEFAULT 1,
   checked BOOLEAN NOT NULL DEFAULT false,
   created_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 
--- No RLS for V1 (shared household, no auth)
-ALTER TABLE public.inventory ENABLE ROW LEVEL SECURITY;
-CREATE POLICY "Allow all on inventory" ON public.inventory FOR ALL USING (true) WITH CHECK (true);
-
-ALTER TABLE public.shopping_list ENABLE ROW LEVEL SECURITY;
-CREATE POLICY "Allow all on shopping_list" ON public.shopping_list FOR ALL USING (true) WITH CHECK (true);
+-- RLS will be configured separately in supabase_rls_setup.sql

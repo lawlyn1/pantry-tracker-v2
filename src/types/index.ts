@@ -13,6 +13,11 @@ export interface InventoryItem {
   category: Category;
   expiration_date: string | null;
   date_added: string;
+  calories_per_100: number | null;
+  protein_per_100: number | null;
+  carbs_per_100: number | null;
+  fat_per_100: number | null;
+  fibre_per_100: number | null;
 }
 
 export interface ShoppingListItem {

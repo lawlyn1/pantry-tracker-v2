@@ -12,6 +12,11 @@ export const ManualEntry: React.FC = () => {
   const [location, setLocation] = useState<Location>('Fridge');
   const [category, setCategory] = useState<Category>('Dairy');
   const [expiryDate, setExpiryDate] = useState('');
+  const [calories, setCalories] = useState('');
+  const [protein, setProtein] = useState('');
+  const [carbs, setCarbs] = useState('');
+  const [fat, setFat] = useState('');
+  const [fibre, setFibre] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
@@ -36,6 +41,11 @@ export const ManualEntry: React.FC = () => {
         location,
         category,
         expiration_date: expiryDate || null,
+        calories_per_100: calories ? Number(calories) : null,
+        protein_per_100: protein ? Number(protein) : null,
+        carbs_per_100: carbs ? Number(carbs) : null,
+        fat_per_100: fat ? Number(fat) : null,
+        fibre_per_100: fibre ? Number(fibre) : null,
       });
 
       setSuccess(`${name.trim()} added!`);
@@ -43,6 +53,11 @@ export const ManualEntry: React.FC = () => {
       setQuantity(1);
       setVolumeWeight('');
       setExpiryDate('');
+      setCalories('');
+      setProtein('');
+      setCarbs('');
+      setFat('');
+      setFibre('');
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to add item');
     } finally {
@@ -123,6 +138,71 @@ export const ManualEntry: React.FC = () => {
             onChange={(e) => setExpiryDate(e.target.value)}
             className="input-field"
           />
+        </div>
+
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-2">Macros (per 100g/ml)</label>
+          <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+            <div>
+              <label className="block text-xs text-gray-500 mb-1">Calories (kcal)</label>
+              <input
+                type="number"
+                value={calories}
+                onChange={(e) => setCalories(e.target.value)}
+                className="input-field text-sm"
+                placeholder="0"
+                min="0"
+              />
+            </div>
+            <div>
+              <label className="block text-xs text-gray-500 mb-1">Protein (g)</label>
+              <input
+                type="number"
+                value={protein}
+                onChange={(e) => setProtein(e.target.value)}
+                className="input-field text-sm"
+                placeholder="0"
+                min="0"
+                step="0.1"
+              />
+            </div>
+            <div>
+              <label className="block text-xs text-gray-500 mb-1">Carbs (g)</label>
+              <input
+                type="number"
+                value={carbs}
+                onChange={(e) => setCarbs(e.target.value)}
+                className="input-field text-sm"
+                placeholder="0"
+                min="0"
+                step="0.1"
+              />
+            </div>
+            <div>
+              <label className="block text-xs text-gray-500 mb-1">Fat (g)</label>
+              <input
+                type="number"
+                value={fat}
+                onChange={(e) => setFat(e.target.value)}
+                className="input-field text-sm"
+                placeholder="0"
+                min="0"
+                step="0.1"
+              />
+            </div>
+            <div>
+              <label className="block text-xs text-gray-500 mb-1">Fibre (g)</label>
+              <input
+                type="number"
+                value={fibre}
+                onChange={(e) => setFibre(e.target.value)}
+                className="input-field text-sm"
+                placeholder="0"
+                min="0"
+                step="0.1"
+              />
+            </div>
+          </div>
         </div>
 
         <button type="submit" disabled={loading} className="btn-primary w-full py-3">

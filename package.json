@@ -10,7 +10,8 @@
     "test": "echo \"No tests configured\""
   },
   "dependencies": {
-    "@supabase/supabase-js": "^2.45.0",
+    "@supabase/ssr": "^0.10.2",
+    "@supabase/supabase-js": "^2.105.3",
     "dotenv": "^17.4.2",
     "groq-sdk": "^1.1.2",
     "next": "^15.0.0",

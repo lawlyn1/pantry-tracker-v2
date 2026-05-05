@@ -1,7 +1,7 @@
 'use client';
 
 import React, { createContext, useContext, useState, useEffect, useCallback, ReactNode } from 'react';
-import { supabase } from '@/lib/supabase';
+import { createClient } from '@/utils/supabase/client';
 import { InventoryItem, ShoppingListItem, ParsedReceiptItem } from '@/types';
 
 interface PantryContextType {
@@ -9,13 +9,14 @@ interface PantryContextType {
   shoppingList: ShoppingListItem[];
   loading: boolean;
   error: string | null;
+  user: any;
   fetchInventory: () => Promise<void>;
-  addItem: (item: Omit<InventoryItem, 'id' | 'date_added'>) => Promise<void>;
-  addItemsBulk: (items: Omit<InventoryItem, 'id' | 'date_added'>[]) => Promise<void>;
+  addItem: (item: Omit<InventoryItem, 'id' | 'date_added' | 'user_id'>) => Promise<void>;
+  addItemsBulk: (items: Omit<InventoryItem, 'id' | 'date_added' | 'user_id'>[]) => Promise<void>;
   deleteItem: (id: string) => Promise<void>;
   clearInventory: () => Promise<void>;
   fetchShoppingList: () => Promise<void>;
-  addShoppingItem: (item: Omit<ShoppingListItem, 'id' | 'created_at'>) => Promise<void>;
+  addShoppingItem: (item: Omit<ShoppingListItem, 'id' | 'created_at' | 'user_id'>) => Promise<void>;
   toggleShoppingItem: (id: string, checked: boolean) => Promise<void>;
   deleteShoppingItem: (id: string) => Promise<void>;
   clearCheckedItems: () => Promise<void>;
@@ -24,31 +25,47 @@ interface PantryContextType {
 const PantryContext = createContext<PantryContextType | undefined>(undefined);
 
 export const PantryProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
+  const supabase = createClient();
   const [inventory, setInventory] = useState<InventoryItem[]>([]);
   const [shoppingList, setShoppingList] = useState<ShoppingListItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [user, setUser] = useState<any>(null);
+
+  useEffect(() => {
+    const getUser = async () => {
+      const { data: { user } } = await supabase.auth.getUser();
+      setUser(user);
+      if (!user) {
+        window.location.href = '/login';
+      }
+    };
+    getUser();
+  }, [supabase]);
 
   const fetchInventory = useCallback(async () => {
+    if (!user) return;
     try {
       setError(null);
       const { data, error: err } = await supabase
         .from('inventory')
         .select('*')
+        .eq('user_id', user.id)
         .order('expiration_date', { ascending: true });
       if (err) throw err;
       setInventory(data || []);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to fetch inventory');
     }
-  }, []);
+  }, [user, supabase]);
 
-  const addItem = async (item: Omit<InventoryItem, 'id' | 'date_added'>) => {
+  const addItem = async (item: Omit<InventoryItem, 'id' | 'date_added' | 'user_id'>) => {
+    if (!user) return;
     try {
       setError(null);
       const { data, error: err } = await supabase
         .from('inventory')
-        .insert(item)
+        .insert({ ...item, user_id: user.id })
         .select()
         .single();
       if (err) throw err;
@@ -59,12 +76,14 @@ export const PantryProvider: React.FC<{ children: ReactNode }> = ({ children }) 
     }
   };
 
-  const addItemsBulk = async (items: Omit<InventoryItem, 'id' | 'date_added'>[]) => {
+  const addItemsBulk = async (items: Omit<InventoryItem, 'id' | 'date_added' | 'user_id'>[]) => {
+    if (!user) return;
     try {
       setError(null);
+      const itemsWithUserId = items.map(item => ({ ...item, user_id: user.id }));
       const { data, error: err } = await supabase
         .from('inventory')
-        .insert(items)
+        .insert(itemsWithUserId)
         .select();
       if (err) throw err;
       setInventory(prev => [...(data || []), ...prev]);
@@ -87,25 +106,28 @@ export const PantryProvider: React.FC<{ children: ReactNode }> = ({ children }) 
   };
 
   const fetchShoppingList = useCallback(async () => {
+    if (!user) return;
     try {
       setError(null);
       const { data, error: err } = await supabase
         .from('shopping_list')
         .select('*')
+        .eq('user_id', user.id)
         .order('created_at', { ascending: false });
       if (err) throw err;
       setShoppingList(data || []);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to fetch shopping list');
     }
-  }, []);
+  }, [user, supabase]);
 
-  const addShoppingItem = async (item: Omit<ShoppingListItem, 'id' | 'created_at'>) => {
+  const addShoppingItem = async (item: Omit<ShoppingListItem, 'id' | 'created_at' | 'user_id'>) => {
+    if (!user) return;
     try {
       setError(null);
       const { data, error: err } = await supabase
         .from('shopping_list')
-        .insert(item)
+        .insert({ ...item, user_id: user.id })
         .select()
         .single();
       if (err) throw err;
@@ -181,7 +203,7 @@ export const PantryProvider: React.FC<{ children: ReactNode }> = ({ children }) 
 
   return (
     <PantryContext.Provider value={{
-      inventory, shoppingList, loading, error,
+      inventory, shoppingList, loading, error, user,
       fetchInventory, addItem, addItemsBulk, deleteItem, clearInventory,
       fetchShoppingList, addShoppingItem, toggleShoppingItem, deleteShoppingItem, clearCheckedItems,
     }}>
