@@ -13,6 +13,7 @@ interface PantryContextType {
   fetchInventory: () => Promise<void>;
   addItem: (item: Omit<InventoryItem, 'id' | 'date_added' | 'user_id'>) => Promise<void>;
   addItemsBulk: (items: Omit<InventoryItem, 'id' | 'date_added' | 'user_id'>[]) => Promise<void>;
+  updateItem: (id: string, updates: Partial<Omit<InventoryItem, 'id' | 'date_added'>>) => Promise<void>;
   deleteItem: (id: string) => Promise<void>;
   clearInventory: () => Promise<void>;
   fetchShoppingList: () => Promise<void>;
@@ -90,6 +91,23 @@ export const PantryProvider: React.FC<{ children: ReactNode }> = ({ children }) 
       setInventory(prev => [...(data || []), ...prev]);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to add items');
+      throw err;
+    }
+  };
+
+  const updateItem = async (id: string, updates: Partial<Omit<InventoryItem, 'id' | 'date_added'>>) => {
+    try {
+      setError(null);
+      const { data, error: err } = await supabase
+        .from('inventory')
+        .update(updates)
+        .eq('id', id)
+        .select()
+        .single();
+      if (err) throw err;
+      setInventory(prev => prev.map(item => item.id === id ? data : item));
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to update item');
       throw err;
     }
   };
@@ -205,7 +223,7 @@ export const PantryProvider: React.FC<{ children: ReactNode }> = ({ children }) 
   return (
     <PantryContext.Provider value={{
       inventory, shoppingList, loading, error, user,
-      fetchInventory, addItem, addItemsBulk, deleteItem, clearInventory,
+      fetchInventory, addItem, addItemsBulk, updateItem, deleteItem, clearInventory,
       fetchShoppingList, addShoppingItem, toggleShoppingItem, deleteShoppingItem, clearCheckedItems,
     }}>
       {children}

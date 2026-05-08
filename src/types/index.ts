@@ -1,5 +1,5 @@
 export const LOCATIONS = ['Fridge', 'Freezer', 'Cupboard', 'Spice Rack', 'Pantry'] as const;
-export type Location = typeof LOCATIONS[number];
+export type Location = string;
 
 export const CATEGORIES = ['Dairy', 'Meat', 'Fruit', 'Veg', 'Grains', 'Tinned Goods', 'Fish', 'Spices', 'Alcohol'] as const;
 export type Category = typeof CATEGORIES[number];

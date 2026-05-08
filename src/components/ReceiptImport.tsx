@@ -2,9 +2,15 @@
 
 import React, { useState } from 'react';
 import { usePantry } from '@/context/PantryContext';
-import { ParsedReceiptItem, LOCATIONS, CATEGORIES, Location, Category } from '@/types';
+import { ParsedReceiptItem, CATEGORIES, Location, Category } from '@/types';
 
-export const ReceiptImport: React.FC = () => {
+const UNIT_OPTIONS = ['g', 'kg', 'ml', 'L', 'oz', 'lbs', 'units'];
+
+interface ReceiptImportProps {
+  locations: Location[];
+}
+
+export const ReceiptImport: React.FC<ReceiptImportProps> = ({ locations }) => {
   const { addItemsBulk } = usePantry();
   const [receiptText, setReceiptText] = useState('');
   const [purchaseDate, setPurchaseDate] = useState(() => {
@@ -93,6 +99,10 @@ export const ReceiptImport: React.FC = () => {
     setParsedItems(prev => prev.filter((_, i) => i !== index));
   };
 
+  const updateVolumeWeight = (index: number, amount: string, unit: string) => {
+    updateItem(index, 'volume_weight', amount ? `${amount}${unit}` : null);
+  };
+
   return (
     <div className="max-w-lg mx-auto space-y-4">
       <div>
@@ -168,13 +178,24 @@ export const ReceiptImport: React.FC = () => {
                 </div>
                 <div>
                   <label className="text-xs text-gray-500">Size</label>
-                  <input
-                    type="text"
-                    value={item.volume_weight || ''}
-                    onChange={(e) => updateItem(index, 'volume_weight', e.target.value || null)}
-                    className="input-field"
-                    placeholder="500g"
-                  />
+                  <div className="grid grid-cols-[1fr_auto] gap-1">
+                    <input
+                      type="number"
+                      min="0"
+                      step="0.1"
+                      value={parseVolumeWeight(item.volume_weight).amount}
+                      onChange={(e) => updateVolumeWeight(index, e.target.value, parseVolumeWeight(item.volume_weight).unit)}
+                      className="input-field"
+                      placeholder="500"
+                    />
+                    <select
+                      value={parseVolumeWeight(item.volume_weight).unit}
+                      onChange={(e) => updateVolumeWeight(index, parseVolumeWeight(item.volume_weight).amount, e.target.value)}
+                      className="select-field w-20"
+                    >
+                      {UNIT_OPTIONS.map(unit => <option key={unit} value={unit}>{unit}</option>)}
+                    </select>
+                  </div>
                 </div>
                 <div>
                   <label className="text-xs text-gray-500">Expiry</label>
@@ -195,7 +216,7 @@ export const ReceiptImport: React.FC = () => {
                     onChange={(e) => updateItem(index, 'location', e.target.value)}
                     className="select-field"
                   >
-                    {LOCATIONS.map(loc => <option key={loc} value={loc}>{loc}</option>)}
+                    {locations.map(loc => <option key={loc} value={loc}>{loc}</option>)}
                   </select>
                 </div>
                 <div>
@@ -216,3 +237,13 @@ export const ReceiptImport: React.FC = () => {
     </div>
   );
 };
+
+function parseVolumeWeight(volumeWeight: string | null): { amount: string; unit: string } {
+  if (!volumeWeight) return { amount: '', unit: 'g' };
+
+  const match = volumeWeight.trim().match(/^([+-]?(?:\d+(?:[.,]\d+)?|[.,]\d+))\s*(.*)$/);
+  if (!match) return { amount: '', unit: 'g' };
+
+  const unit = UNIT_OPTIONS.includes(match[2].trim()) ? match[2].trim() : 'g';
+  return { amount: match[1].replace(',', '.'), unit };
+}

@@ -2,13 +2,20 @@
 
 import React, { useState } from 'react';
 import { usePantry } from '@/context/PantryContext';
-import { LOCATIONS, CATEGORIES, Location, Category } from '@/types';
+import { CATEGORIES, Location, Category } from '@/types';
 
-export const AddItemForm: React.FC = () => {
+const UNIT_OPTIONS = ['g', 'kg', 'ml', 'L', 'oz', 'lbs', 'units'];
+
+interface AddItemFormProps {
+  locations: Location[];
+}
+
+export const AddItemForm: React.FC<AddItemFormProps> = ({ locations }) => {
   const { addItem } = usePantry();
   const [name, setName] = useState('');
   const [quantity, setQuantity] = useState(1);
-  const [volumeWeight, setVolumeWeight] = useState('');
+  const [volumeAmount, setVolumeAmount] = useState('');
+  const [volumeUnit, setVolumeUnit] = useState('g');
   const [location, setLocation] = useState<Location>('Fridge');
   const [category, setCategory] = useState<Category>('Dairy');
   const [expiryDate, setExpiryDate] = useState('');
@@ -20,6 +27,46 @@ export const AddItemForm: React.FC = () => {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
+  const [quantityTouchY, setQuantityTouchY] = useState<number | null>(null);
+  const quantitySwipeThreshold = 20;
+
+  const incrementQuantity = () => {
+    setQuantity(prev => prev + 1);
+  };
+
+  const decrementQuantity = () => {
+    setQuantity(prev => Math.max(1, prev - 1));
+  };
+
+  const handleQuantityWheel = (e: React.WheelEvent<HTMLDivElement>) => {
+    e.preventDefault();
+    if (e.deltaY < 0) {
+      incrementQuantity();
+    } else if (e.deltaY > 0) {
+      decrementQuantity();
+    }
+  };
+
+  const handleQuantityTouchStart = (e: React.TouchEvent<HTMLDivElement>) => {
+    setQuantityTouchY(e.touches[0].clientY);
+  };
+
+  const handleQuantityTouchMove = (e: React.TouchEvent<HTMLDivElement>) => {
+    if (quantityTouchY === null) return;
+
+    const currentY = e.touches[0].clientY;
+    const deltaY = currentY - quantityTouchY;
+
+    if (Math.abs(deltaY) < quantitySwipeThreshold) return;
+
+    if (deltaY < 0) {
+      incrementQuantity();
+    } else {
+      decrementQuantity();
+    }
+
+    setQuantityTouchY(currentY);
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -32,12 +79,13 @@ export const AddItemForm: React.FC = () => {
     setLoading(true);
     setError(null);
     setSuccess(null);
+    const volumeWeight = volumeAmount.trim() ? `${volumeAmount.trim()}${volumeUnit}` : null;
 
     try {
       await addItem({
         name: name.trim(),
         quantity,
-        volume_weight: volumeWeight.trim() || null,
+        volume_weight: volumeWeight,
         location,
         category,
         expiration_date: expiryDate || null,
@@ -51,7 +99,7 @@ export const AddItemForm: React.FC = () => {
       setSuccess(`${name.trim()} added!`);
       setName('');
       setQuantity(1);
-      setVolumeWeight('');
+      setVolumeAmount('');
       setExpiryDate('');
       setCalories('');
       setProtein('');
@@ -83,23 +131,64 @@ export const AddItemForm: React.FC = () => {
         <div className="grid grid-cols-2 gap-3">
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">Quantity</label>
-            <input
-              type="number"
-              value={quantity}
-              onChange={(e) => setQuantity(Math.max(1, Number(e.target.value)))}
-              min="1"
-              className="input-field"
-            />
+            <div
+              onWheel={handleQuantityWheel}
+              className="flex h-11 items-center justify-between rounded-xl border border-gray-200 bg-white shadow-sm transition-all hover:border-blue-200 hover:shadow-md focus-within:border-blue-400 focus-within:ring-2 focus-within:ring-blue-100"
+              role="spinbutton"
+              aria-label="Quantity"
+              aria-valuemin={1}
+              aria-valuenow={quantity}
+              tabIndex={0}
+            >
+              <button
+                type="button"
+                onClick={decrementQuantity}
+                disabled={quantity <= 1}
+                className="flex h-full w-11 items-center justify-center rounded-l-xl text-lg font-semibold text-gray-500 transition-colors hover:bg-gray-50 hover:text-blue-600 disabled:cursor-not-allowed disabled:text-gray-300"
+                aria-label="Decrease quantity"
+              >
+                -
+              </button>
+              <div
+                onTouchStart={handleQuantityTouchStart}
+                onTouchMove={handleQuantityTouchMove}
+                className="flex min-w-0 flex-1 touch-none flex-col items-center justify-center border-x border-gray-100 px-2"
+              >
+                <span className="text-base font-semibold leading-none text-gray-900">{quantity}</span>
+                <span className="mt-0.5 text-[10px] font-medium uppercase tracking-wide text-gray-300">scroll</span>
+              </div>
+              <button
+                type="button"
+                onClick={incrementQuantity}
+                className="flex h-full w-11 items-center justify-center rounded-r-xl text-lg font-semibold text-gray-500 transition-colors hover:bg-gray-50 hover:text-blue-600"
+                aria-label="Increase quantity"
+              >
+                +
+              </button>
+            </div>
           </div>
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">Volume/Weight</label>
-            <input
-              type="text"
-              value={volumeWeight}
-              onChange={(e) => setVolumeWeight(e.target.value)}
-              className="input-field"
-              placeholder="e.g., 2L, 500g"
-            />
+            <div className="grid grid-cols-[1fr_auto] gap-2">
+              <input
+                type="number"
+                min="0"
+                step="0.1"
+                value={volumeAmount}
+                onChange={(e) => setVolumeAmount(e.target.value)}
+                className="input-field"
+                placeholder="500"
+              />
+              <select
+                value={volumeUnit}
+                onChange={(e) => setVolumeUnit(e.target.value)}
+                className="select-field w-24"
+              >
+                {UNIT_OPTIONS.map(unit => (
+                  <option key={unit} value={unit}>{unit}</option>
+                ))}
+              </select>
+            </div>
           </div>
         </div>
 
@@ -111,7 +200,7 @@ export const AddItemForm: React.FC = () => {
               onChange={(e) => setLocation(e.target.value as Location)}
               className="select-field"
             >
-              {LOCATIONS.map(loc => (
+              {locations.map(loc => (
                 <option key={loc} value={loc}>{loc}</option>
               ))}
             </select>
